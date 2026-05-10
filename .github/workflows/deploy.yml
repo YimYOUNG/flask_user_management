@@ -1,0 +1,56 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install sshpass
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y sshpass
+    
+    - name: Step 1 - SSH connection test
+      run: |
+        echo "Testing..."
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} "echo 'OK'"
+    
+    - name: Step 2 - Clean and prepare
+      run: |
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} "rm -rf ~/flask-app && mkdir -p ~/flask-app"
+    
+    - name: Step 3 - Upload with rsync
+      run: |
+        export RSYNC_RSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" rsync -avz --exclude='venv' --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='.trae' --exclude='tests' ./ ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }}:~/flask-app/
+    
+    - name: Step 4 - Setup dependencies
+      run: |
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} "cd ~/flask-app && if [ ! -d 'venv' ]; then python3 -m venv venv; fi && source venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt"
+
+    - name: Step 5 - Setup systemd service
+      run: |
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} "cat > /etc/systemd/system/flask-app.service << 'SERVICEEOF'
+[Unit]
+Description=Flask User Management Application
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/root/flask-app
+ExecStart=/root/flask-app/venv/bin/python /root/flask-app/run.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SERVICEEOF
+systemctl daemon-reload && systemctl enable flask-app && systemctl restart flask-app && sleep 3 && systemctl status flask-app --no-pager"
