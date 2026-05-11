@@ -1,4 +1,6 @@
-# Flask User Management System 
+# Flask User Management System
+
+**Tech Stack:** Python / Flask / SQLite3 / WTForms / pytest / GitHub Actions / Alibaba Cloud
 
 ## Quick Start
 
@@ -33,6 +35,7 @@ flask-user-system/
 │   └── utils/               # DB, forms, validators
 ├── tests/                   # pytest tests
 ├── .github/workflows/       # GitHub Actions
+├── users.db                 # SQLite database (auto-generated)
 ├── requirements.txt
 └── run.py
 ```
@@ -43,8 +46,10 @@ flask-user-system/
 - User management (admin)
 - RESTful API for mobile apps
 - CSRF protection
-- Password hashing
-- 100% test coverage
+- Password hashing (scrypt)
+- SQLite3 database with raw SQL
+- Database initialization and migration support
+- 100% test coverage (488 statements)
 
 ## Testing
 ```bash
